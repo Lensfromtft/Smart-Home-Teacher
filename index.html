@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Smart Home Dashboard - Login</title>
+
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <script type="text/javascript">
+    (function(){
+      emailjs.init("anD1oBKk4AUxotVXi");
+    })();
+  </script>
+  <style>
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f9f9f9;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+      position: relative;
+    }
+
+    #login-container, #verification-container {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    #login-container h2, #verification-container h2 { margin-bottom: 20px; }
+    #login-container input, #verification-container input {
+      width: 80%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 1rem;
+    }
+    #login-container button, #verification-container button {
+      padding: 10px 20px;
+      font-size: 1rem;
+      border: none;
+      border-radius: 4px;
+      background: #333;
+      color: #fff;
+      cursor: pointer;
+    }
+    #error-message, #verification-error {
+      color: red;
+      margin-top: 10px;
+      font-size: 0.9rem;
+    }
+
+    #logout-container {
+      text-align: center;
+      margin-top: 20px;
+    }
+    #logout-container button {
+      padding: 10px 20px;
+      font-size: 1rem;
+      border: none;
+      border-radius: 4px;
+      background: #333;
+      color: #fff;
+      cursor: pointer;  
+      transition: background 0.2s ease;
+    }
+    #logout-container button:hover {
+      background: #555;
+    }
+
+    #dashboard-container {
+      width: 100%;
+      max-width: 800px;
+    }
+    .tabs {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .tabs button {
+      background: #ccc;
+      border: none;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-size: 1rem;
+      border-radius: 4px;
+      transition: background 0.2s ease;
+    }
+    .tabs button:hover { background: #bbb; }
+    .tabs button.active { background: #333; color: #fff; }
+    .tab-content {
+      display: none;
+      width: 100%;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .indicator {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      margin-left: 5px;
+      vertical-align: middle;
+      background-color: red;
+    }
+    .indicator.on { background-color: #00cc00; }
+    .slider-container { margin: 20px 0; }
+    input[type="range"] { width: 100%; }
+    button { margin: 5px; padding: 8px 16px; border: none; border-radius: 4px; background: #333; color: #fff; cursor: pointer; font-size: 0.9rem; }
+    button:hover { background: #555; }
+    footer { margin-top: auto; font-size: 0.9rem; color: #999; text-align: center; }
+  </style>
+</head>
+<body>
+
+  <div id="login-container">
+    <h2>Login Smart Home</h2>
+    <input type="text" id="username" placeholder="Username">
+    <br>
+    <input type="password" id="password" placeholder="Password">
+    <br>
+    <button onclick="validateLogin()">Sign In</button>
+    <div id="error-message"></div>
+  </div>
+  
+
+  <div id="verification-container" style="display: none;">
+    <p>A verification code has been sent to your email address.<br>Please enter the code here :</p>
+    <input type="text" id="verification-code" placeholder="Code de vérification">
+    <br>
+    <button onclick="verifyCode()">Check</button>
+    <div id="verification-error"></div>
+  </div>
+  
+
+  <div id="dashboard-container" style="display: none;">
+    <h1>Smart Home Dashboard - PFE</h1>
+    <nav class="tabs">
+      <button class="tab-btn active" onclick="showTab('tab-temp')">Temperature</button>
+      <button class="tab-btn" onclick="showTab('tab-lights')">Lights</button>
+      <button class="tab-btn" onclick="showTab('tab-door')">Door</button>
+    </nav>
+    
+
+    <section id="tab-temp" class="tab-content">
+      <h2>Temperature</h2>
+      <p>Current Temperature: <strong id="current-temp">-- °C</strong></p>
+      <div class="slider-container">
+        <label for="tempSlider">Desired Temperature:</label>
+        <input type="range" id="tempSlider" min="0" max="40" step="0.1" value="20" oninput="updateWantedTemp()">
+        <p>Set Point: <span id="wanted-temp">20</span> °C</p>
+      </div>
+
+      <button id="heaterToggleButton" onclick="toggleHeater()">Heater OFF</button>
+
+      <div>
+        <canvas id="tempChart" width="400" height="200"></canvas>
+      </div>
+    </section>
+    
+
+    <section id="tab-lights" class="tab-content">
+      <h2>Light Control</h2>
+      <div>
+        <h3>Light 1</h3>
+        <button onclick="toggleLight(1)">ON/OFF</button>
+        <span class="indicator" id="light1-indicator"></span>
+      </div>
+      <div>
+        <h3>Light 2</h3>
+        <button onclick="toggleLight(2)">ON/OFF</button>
+        <span class="indicator" id="light2-indicator"></span>
+      </div>
+      <div>
+        <h3>Light 3</h3>
+        <button onclick="toggleLight(3)">ON/OFF</button>
+        <span class="indicator" id="light3-indicator"></span>
+      </div>
+    </section>
+    
+
+    <section id="tab-door" class="tab-content">
+      <h2>Door Control</h2>
+      <p>Door Status: <span class="indicator" id="door-indicator"></span></p>
+      <p>Presence Detection: <strong id="presence-status">Loading...</strong></p>
+      <button id="openDoorButton" onclick="openDoor()">Open</button>
+      <button onclick="closeDoor()">Close</button>
+    </section>
+    
+    <div id="logout-container">
+      <button onclick="logout()">Logout</button>
+    </div>
+    
+    <footer>
+      &copy; 2025 - Ernouf & Guedj
+    </footer>
+  </div>
+
+  <script>
+
+
+    const validAdminUser = "admin";
+    const validAdminPass = "admin";
+    const validUserUser  = "user";
+    const validUserPass  = "user";
+    
+    let currentRole = "";
+    let generatedCode = ""; 
+
+    
+    function validateLogin() {
+      const username = document.getElementById("username").value;
+      const password = document.getElementById("password").value;
+      const errorMessage = document.getElementById("error-message");
+    
+      if (username === validAdminUser && password === validAdminPass) {
+        currentRole = "admin";
+
+        generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+        sendVerificationEmail(generatedCode);
+
+        document.getElementById("login-container").style.display = "none";
+        document.getElementById("verification-container").style.display = "block";
+      } else if (username === validUserUser && password === validUserPass) {
+        currentRole = "user";
+        document.getElementById("login-container").style.display = "none";
+        document.getElementById("dashboard-container").style.display = "block";
+        document.getElementById("tempSlider").disabled = true;
+        document.getElementById("openDoorButton").disabled = true;
+      } else {
+        errorMessage.innerText = "Incorrect username or password";
+        return;
+      }
+    }
+    
+    function sendVerificationEmail(code) {
+      const templateParams = {
+        to_email: 'lenaic.ernouf@esme.fr',
+        verification_code: code
+      };
+
+      emailjs.send('service_k5bqddd', 'template_ip3tejl', templateParams)
+        .then(function(response) {
+          console.log('Email sent successfully!', response.status, response.text);
+        }, function(error) {
+          console.error('Error sending email :', error);
+          document.getElementById("verification-error").innerText = "Error sending verification code. Please try again.";
+        });
+    }
+    
+    function verifyCode() {
+      const enteredCode = document.getElementById("verification-code").value;
+      if (enteredCode === generatedCode) {
+
+        document.getElementById("verification-container").style.display = "none";
+        document.getElementById("dashboard-container").style.display = "block";
+
+        document.getElementById("tempSlider").disabled = false;
+        document.getElementById("openDoorButton").disabled = false;
+      } else {
+        document.getElementById("verification-error").innerText = "Incorrect verification code. Please try again.";
+      }
+    }
+    
+    function logout() {
+      currentRole = "";
+      document.getElementById("username").value = "";
+      document.getElementById("password").value = "";
+      document.getElementById("error-message").innerText = "";
+      document.getElementById("verification-error").innerText = "";
+      document.getElementById("tempSlider").disabled = false;
+      document.getElementById("openDoorButton").disabled = false;
+      document.getElementById("dashboard-container").style.display = "none";
+      document.getElementById("login-container").style.display = "block";
+    }
+    
+    function showTab(tabId) {
+      const contents = document.querySelectorAll('.tab-content');
+      contents.forEach(c => c.style.display = 'none');
+      const buttons = document.querySelectorAll('.tab-btn');
+      buttons.forEach(b => b.classList.remove('active'));
+      document.getElementById(tabId).style.display = 'block';
+      const activeButton = Array.from(buttons).find(btn => 
+        btn.getAttribute('onclick') === `showTab('${tabId}')`
+      );
+      if (activeButton) {
+        activeButton.classList.add('active');
+      }
+    }
+    showTab('tab-temp');
+    
+    const brokerURL = "wss://public.mqttserver.eu:8081";
+    const client = mqtt.connect(brokerURL);
+    
+    // MQTT Topics
+    const topicTemperature = "lentheo/temperature";
+    const topicWantedTemp  = "lentheo/wanted";
+    const topicLight1      = "lentheo/light1";
+    const topicLight2      = "lentheo/light2";
+    const topicLight3      = "lentheo/light3";
+    const topicDoor        = "lentheo/door";
+    const topicHeater      = "lentheo/heater";
+    const topicSomeone     = "lentheo/someone";
+    
+    let currentTemperature = 0;
+    let wantedTemperatureVal = 20;
+    let heaterState = false;
+    let lastSomeoneState = "";
+    
+    client.on("connect", () => {
+      console.log("Connected to MQTT broker:", brokerURL);
+      client.subscribe(topicTemperature);
+      client.subscribe(topicLight1);
+      client.subscribe(topicLight2);
+      client.subscribe(topicLight3);
+      client.subscribe(topicDoor);
+      client.subscribe(topicSomeone);
+    });
+    
+    client.on("message", (topic, message) => {
+      const payload = message.toString();
+      
+      if (topic === topicTemperature) {
+        document.getElementById("current-temp").innerText = payload + " °C";
+        currentTemperature = parseFloat(payload);
+        updateHeaterButton();
+        if (tempChart) {
+          tempChart.data.labels.push(new Date().toLocaleTimeString());
+          tempChart.data.datasets[0].data.push(currentTemperature);
+          if (tempChart.data.labels.length > 20) {
+            tempChart.data.labels.shift();
+            tempChart.data.datasets[0].data.shift();
+          }
+          tempChart.update();
+        }
+      }
+      if (topic === topicLight1) {
+        updateLightIndicator(1, payload);
+      }
+      if (topic === topicLight2) {
+        updateLightIndicator(2, payload);
+      }
+      if (topic === topicLight3) {
+        updateLightIndicator(3, payload);
+      }
+      if (topic === topicDoor) {
+        updateDoorIndicator(payload);
+      }
+      if (topic === topicSomeone) {
+        handlePresenceChange(payload);
+      }
+    });
+    
+    function updateWantedTemp() {
+      if (currentRole !== "admin") return;
+      const slider = document.getElementById("tempSlider");
+      wantedTemperatureVal = parseFloat(slider.value);
+      document.getElementById("wanted-temp").innerText = slider.value;
+      client.publish(topicWantedTemp, slider.value);
+      updateHeaterButton();
+    }
+    
+    function updateHeaterButton() {
+      let mode = "Heater";
+      if (wantedTemperatureVal < currentTemperature) {
+        mode = "Air conditioner";
+      }
+      const stateText = heaterState ? "ON" : "OFF";
+      document.getElementById("heaterToggleButton").innerText = mode + " " + stateText;
+    }
+    
+    function toggleHeater() {
+      heaterState = !heaterState;
+      const newState = heaterState ? "ON" : "OFF";
+      client.publish(topicHeater, newState);
+      updateHeaterButton();
+      console.log("Heater state toggled:", newState);
+    }
+    
+    function toggleLight(lightNumber) {
+      const indicator = document.getElementById(`light${lightNumber}-indicator`);
+      if (indicator.classList.contains("on")) {
+        client.publish(`lentheo/light${lightNumber}`, "OFF");
+        indicator.classList.remove("on");
+      } else {
+        client.publish(`lentheo/light${lightNumber}`, "ON");
+        indicator.classList.add("on");
+      }
+    }
+    
+    function controlLight3(state) {
+      client.publish(topicLight3, state);
+      updateLightIndicator(3, state);
+    }
+    
+    function updateLightIndicator(lightNumber, state) {
+      const indicator = document.getElementById(`light${lightNumber}-indicator`);
+      if (!indicator) return;
+      if (state === "ON") {
+        indicator.classList.add("on");
+      } else {
+        indicator.classList.remove("on");
+      }
+    }
+    
+    function openDoor() {
+      if (currentRole !== "admin") return;
+      client.publish(topicDoor, "OPEN");
+    }
+    
+    function closeDoor() {
+      client.publish(topicDoor, "CLOSE");
+    }
+    
+    function updateDoorIndicator(state) {
+      const doorIndicator = document.getElementById("door-indicator");
+      if (state === "OPEN") {
+        doorIndicator.classList.add("on");
+      } else {
+        doorIndicator.classList.remove("on");
+      }
+    }
+    
+    function handlePresenceChange(newState) {
+      const presenceText = document.getElementById("presence-status");
+      if (newState !== lastSomeoneState) {
+        lastSomeoneState = newState;
+        if (newState === "YES") {
+          presenceText.innerText = "Someone is in front of the door";
+          presenceText.style.color = "red";
+          controlLight3("ON");
+        } else {
+          presenceText.innerText = "No one detected";
+          presenceText.style.color = "green";
+          controlLight3("OFF");
+        }
+      }
+    }
+    
+    var tempChart;
+    window.onload = function() {
+      var ctx = document.getElementById('tempChart').getContext('2d');
+      tempChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Temperature (°C)',
+            data: [],
+            borderColor: 'rgba(75, 192, 192, 1)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            borderWidth: 2,
+            fill: false
+          }]
+        },
+        options: {
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    };
+  </script>
+</body>
+</html>
